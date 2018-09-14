@@ -35,7 +35,7 @@ with conn.cursor() as cursor:
         cursor.execute(sql)
         result = (cursor.fetchall())
 
-if result:
+if  result:
     print(' -I- reference data already created ')
 
 else:
@@ -90,6 +90,7 @@ else:
     q2 = datetime.now()
 
     print('time to refernce data prepration is ',str(q2-q1))
+    print('length of table is ',len(df2))
     df2 = df2.iloc[0:100,:]
     df2.to_sql(con=engine, name='reference_df', if_exists='replace')
           

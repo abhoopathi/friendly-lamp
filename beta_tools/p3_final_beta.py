@@ -1,7 +1,9 @@
 #--------- p3 - Number of targets(users) per application/source ---------------------------#
 
 import pandas as pd
+import sys
 import config
+
 import pymysql
 import warnings
 warnings.filterwarnings("ignore")
@@ -66,15 +68,19 @@ newpath = config.proj_path+'/log_for_demo/p3'
 if not os.path.exists(newpath):
     os.makedirs(newpath)
 
-if(real_flag==1):    
-    newpath = config.proj_path+'/p3' 
-    if not os.path.exists(newpath):
-        os.makedirs(newpath)
+#if(real_flag==1):    
+#    newpath = config.proj_path+'/p3' 
+#    if not os.path.exists(newpath):
+#        os.makedirs(newpath)
 
 #for handler in logging.root.handlers[:]:
 #    logging.root.removeHandler(handler)
     
 logging.basicConfig(filename=config.proj_path+'/log_for_demo/p3/p3.log',level=logging.DEBUG)
+
+
+#df_len = df_full.count()
+#df_offset_len = df_len/4
 
 def create_prophet_m(app_name,z1,delay=24):
     
@@ -135,9 +141,9 @@ def create_prophet_m(app_name,z1,delay=24):
         RMSE=math.sqrt(MSE)
         pred_df['APE']=abs(pred_df.error_test*100/pred_df.y)
         MAPE=pred_df.APE.mean()
-        min_error_rate = pred_df.quantile(0)/100
-        max_error_rate = pred_df.quantile(1)/100
-        median_error_rate = pred_df.quantile(.50)/100
+        min_error_rate = pred_df['APE'].quantile(0)/100
+        max_error_rate = pred_df['APE'].quantile(1)/100
+        median_error_rate = pred_df['APE'].quantile(.50)/100
         print("App name:",app_name)
         #print("MSE  :",MSE)
         print("RMSE :",RMSE)
@@ -193,33 +199,86 @@ def forcomb(s,a,df,ftime1):
     
     return prophet_df, prophet_analysis_df, prophet_future_df , df2
 
-if __name__ == '__main__':
+def comb_creation(apps):
+    from pyspark.sql.functions import when
+
+    q1 = datetime.now()
+
+    df_t = df.registerTempTable('dummy')
+    df_t = sqlContext.sql('select count(distinct target_address) as user_count, time_stamp, source , application  from dummy group by source, application, time_stamp')
+
+    #df_needed = df[df.application.isin(apps)]
+    df_t = df_t.registerTempTable('dummy')
+    df_t = sqlContext.sql('select count(*) as count, source , application  from dummy group by source, application')
+
+    df_t= df_t.withColumn('count_flag', when(df_t['count']>config.limit,1).otherwise(0))
+    df_t = df_t[df_t.count_flag==1]
+    
+    # fetching the  source which is to be filtered from filter_db table
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "select * from filter_db" 
+        cursor.execute(sql)
+        so_result = pd.DataFrame(cursor.fetchall())
+    
+    #filtering
+    from pyspark.sql.functions import col
+    #print(so_result)
+    s_filter = list(so_result.source)
+    df_t = df_t.filter(~col('source').isin(s_filter))
+    #df_t = df_t[df_t.source!='134.141.5.104']
+    df2 = df_t.toPandas()
+
+    q2 = datetime.now()
+
+    print('time to refernce data prepration is ',str(q2-q1))
+    print('length of table is ',len(df2))
+    
+    return df2
+
+#if __name__ == '__main__':
+def main():
+
+    global df
+    global apps
     # Reading data from parquet
     print('satrt quering')
 
+    df = sqlContext.read.parquet(config.proj_path+'/datas_new/appid_datapoint_parquet1')
+
+    ### connection to partitiion table to get required apps
+    #def connect_to_mysql2():
+    #    connection = pymysql.connect(host = config.db_host,
+    #                            port= config.db_port,
+    #                            user= config.db_user,
+    #                            password= config.db_pass,
+    #                            db= config.db_name2,
+    #                            charset='utf8',
+    #                            cursorclass=pymysql.cursors.DictCursor)
+    #    return connection
+
+    #conn2=connect_to_mysql2()
+
+    ## fetching tracked apps from db
+    #with conn2.cursor() as cursor:
+    #    # Read a  record
+    #    sql = "select * from nsoptions where optionkey like '%tracked%'" 
+    #    cursor.execute(sql)
+    #    tracked = pd.DataFrame(cursor.fetchall())
+
+    #t  = list(tracked[tracked.OPTIONKEY=='AppIdSystemOptions.trackedApps'].OPTIONVALUE)
+    #apps = t.split(',')
+
+    apps = config.apps
+    df = df[df.application.isin(apps)]
+
     t1 = datetime.now()
-    df = sqlContext.read.parquet(config.proj_path+'/datas/appid_datapoint_parquet1')
-
-    # Checking whether the reference data is available in db or not , if no then creating it
-    with conn.cursor() as cursor:
-            # Read a  record
-            sql = "SHOW TABLES LIKE 'reference_df'" 
-            cursor.execute(sql)
-            result = (cursor.fetchall())
-
-    if result:
     
-        with conn.cursor() as cursor:
-            # Read a  record
-            sql = "select * from reference_df" 
-            cursor.execute(sql)
-            rdf = pd.DataFrame(cursor.fetchall())
-   
-        ap_list = list(rdf.application.unique())
-        if(len(ap_list)>10):
-            ap_list = ap_list[0:10]
-    
-    conn.close()
+    ap_list = config.apps
+
+    rdf = comb_creation(apps)
+
+
     # Needed data extraction
 
     prophet_df = pd.DataFrame()
@@ -232,6 +291,9 @@ if __name__ == '__main__':
     time_to_fetch = str(t2-t1)
 
     for a in tqdm(ap_list):
+    #for k in tqdm(range(0,1)):
+        #a = ap_list[k]
+
         qt1 = datetime.now()
     
         data = df[(df.application == a ) ]
@@ -244,7 +306,8 @@ if __name__ == '__main__':
         user_count_df=df_t.toPandas()
     
 
-        s_array = user_count_df.source.unique()
+        #s_array = user_count_df.source.unique()
+        s_array = rdf.source.unique()
 
         user_count_df = user_count_df.sort_values(by='user_count',ascending=True)       
         dates_outlook = pd.to_datetime(pd.Series(user_count_df.time_stamp),unit='ms')
@@ -286,13 +349,6 @@ if __name__ == '__main__':
     logging.info(datetime.now())
     logging.info('-I- Model ran succesdfully...')
 
-    # saving as csv for graphical representation
-    if(real_flag==1):
-        user_count_full_df.to_csv(config.proj_path+'/p3/user_count_per_app_per_source_dataset.csv',index=False)
-        prophet_analysis_df.to_csv(config.proj_path+'/p3/user_count_analysis_per_app_per_source_data.csv',index=False)
-        prophet_df.to_csv(config.proj_path+'/p3/user_count_evaluation_per_app_per_source_data.csv',index=False)
-        prophet_future_df.to_csv(config.proj_path+'/p3/user_count_forecast_per_app_per_source_data.csv',index=False)
-
 
     # Writing the forecasted data to to mysql_db
 
@@ -301,10 +357,15 @@ if __name__ == '__main__':
     #res22.to_sql(con=engine, name='dummy', if_exists='replace')
     
     if(real_flag==1):
-        prophet_future_df.to_sql(con=engine, name='forecast_p3', if_exists='replace', index=False )
-        prophet_df.to_sql(con=engine, name='eval_p3', if_exists='replace', index=False )
-        user_count_full_df.to_sql(con=engine, name='data_p3', if_exists='replace', index=False )
+        #prophet_future_df.to_sql(con=engine, name='forecast_p3_beta', if_exists='replace', index=False )
+        prophet_df.to_sql(con=engine, name='eval_p3_beta', if_exists='replace', index=False )
+        user_count_full_df.to_sql(con=engine, name='data_p3_beta', if_exists='replace', index=False )
 
+    prophet_future_df['run_date'] = datetime.now().date()
+    if((real_flag ==1) & (config.override_flag==1)):
+        prophet_future_df.to_sql(con=engine, name='forecast_p3_beta', if_exists='replace', index=False )
+    elif((real_flag ==1) & (config.override_flag==0)):
+        prophet_future_df.to_sql(con=engine, name='forecast_p3_beta', if_exists='append', index=False )
 
     total_t2 = datetime.now()
     # calculating runtime in minuts
@@ -318,9 +379,33 @@ if __name__ == '__main__':
     prophet_analysis_df.index = list(range(0,len(prophet_analysis_df)))
 
     if(config.override_flag == 1):
-        prophet_analysis_df.to_sql(con=engine, name='analyse_p3', if_exists='replace',index=False)
+        prophet_analysis_df.to_sql(con=engine, name='analyse_p3_beta', if_exists='replace',index=False)
     else:
-        prophet_analysis_df.to_sql(con=engine, name='analyse_p3', if_exists='append',index=False)
+        prophet_analysis_df.to_sql(con=engine, name='analyse_p3_beta', if_exists='append',index=False)
+
+    ## to create new partition the inputed table 
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "alter table analyse_p3_beta add partition (partition new values in ('"+datetime.now().date()+"'))" 
+        cursor.execute(sql)
+
+    ## to drop 'latest' partition  
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "alter table analyse_p3_beta drop partition latest" 
+        cursor.execute(sql)
+
+    ## to make new as 'latest' partition the inputed table 
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "ALTER TABLE analyse_p3_beta RENAME PARTITION new INTO latest" 
+        cursor.execute(sql)
+
+    ## to partition the inputed table 
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "alter table forecast_p3_beta partition by key(ds) partitions 6 " 
+        cursor.execute(sql)
 
     print(total_time)
     run_time_table = pd.DataFrame({'report':'p3','run_time':total_real,'run_date':datetime.now().date()},index=[3])
@@ -337,3 +422,5 @@ if __name__ == '__main__':
     logging.info('-I- The total run time  is ')
     logging.info(total_time)
     print ('Total run time  is ', total_time)
+    print ('Total nof combinations = ', len(rdf))
+    print ('Total nof combinations for ',a,' = ', len(rdf[rdf.application==a]))

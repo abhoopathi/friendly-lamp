@@ -1,0 +1,335 @@
+from pyspark.sql import SQLContext
+import sys
+from pyspark.context import SparkContext
+from pyspark.sql.session import SparkSession
+
+
+from pyspark.sql import SparkSession
+import pymysql
+import os
+
+
+import config
+
+from datetime import datetime, time, timedelta
+import pandas as pd
+
+# creating the mysql link
+def connect_to_mysql():
+    connection = pymysql.connect(host = config.db_host,
+                            port= config.db_port,
+                            user= config.db_user,
+                            password= config.db_pass,
+                            db= config.db_name,
+                            charset='utf8',
+                            cursorclass=pymysql.cursors.DictCursor)
+    return connection
+
+conn=connect_to_mysql()
+
+from sqlalchemy import create_engine
+engine = create_engine(str("mysql+pymysql://"+config.db_user+":"+config.db_pass+"@"+config.db_host+":"+str(config.db_port)+"/"+config.db_name))
+
+full_t1 = datetime.now()
+# initialise sparkContext
+spark1 = SparkSession.builder \
+    .master(config.sp_master) \
+    .appName(config.sp_appname) \
+    .config('spark.executor.memory', config.sp_memory) \
+    .config("spark.cores.max", config.sp_cores) \
+    .getOrCreate()
+
+sc = spark1.sparkContext
+
+# using SQLContext to read parquet file
+
+sqlContext = SQLContext(sc)
+  
+      
+def append_to_parquet_datapoint():
+    
+
+    ## FOR APPID_ATTRIBUTE
+    print('--------------------------FOR APPID_DATAPOINT-----------------------')
+
+    ## finding the max time_stamp from attribute and datapoint
+    t1 = datetime.now()
+    
+    ## converting the df which less than a timestamp 
+    df = datapoint_df.registerTempTable('dummy')
+    ts = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+
+    if(config.test_val==1):
+        datapoint_df1 = datapoint_df.registerTempTable('dummy')
+        datapoint_df1 = sqlContext.sql('select  *  from dummy where time_stamp<'+str(ts[0][0]))
+    else:
+        datapoint_df1 = datapoint_df
+
+    df_len  = datapoint_df.count()
+    print('length = ',df_len)
+    
+    ## new max time_stamp
+    df = datapoint_df1.registerTempTable('dummy')
+    ts_max1 = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+    
+    old_schema = datapoint_df1.schema
+    print('---fetching from db---')
+    
+    ## fetching the latest data from the table in db
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "select * from appid_datapoint_backup10 where time_stamp>"+str(ts_max1[0][0]) 
+        cursor.execute(sql)
+        temp = (cursor.fetchall())
+        if(temp):
+            datapoint_latest = pd.DataFrame(temp)
+        else:
+            datapoint_latest = pd.DataFrame()
+
+    if(len(datapoint_latest>0)):
+        datapoint_latest = datapoint_latest[old_schema.names]
+        datapoint_latest.to_csv('temp.csv',index=False)
+    
+        #print(datapoint_latest1.head())
+        #datapoint_latest = sqlContext.createDataFrame(datapoint_latest1,schema=old_schema)
+
+        datapoint_latest = None
+        datapoint_latest = sqlContext.read.format('com.databricks.spark.csv').options(header=True, inferschema=True).load('temp.csv')
+
+
+
+        #datapoint_final = datapoint_df1.unionAll(datapoint_latest)
+        #datapoint_final = datapoint_final.orderBy('time_stamp',ascending=False)
+
+
+        #df = datapoint_final.registerTempTable('dummy')
+        #ts_max2 = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+
+        #df = datapoint_final.registerTempTable('dummy')
+        #df = sqlContext.sql("select  *  from dummy where time_stamp="+str(ts[0][0])+" ")
+        
+        print('filtered_max = ',ts_max1[0][0])
+        #print('appended final_max = ',ts_max2[0][0])
+        #df_len  = datapoint_final.count()
+        #print('length = ',df_len)
+
+        #df_len  = df.count()
+        #print('length = ',df_len)
+        
+        # appending to existing parquet file
+        datapoint_latest.write.parquet(config.proj_path+'/datas_new/appid_datapoint_parquet1',
+                                        mode='append')
+    #datapoint_final.write.parquet(config.proj_path+'/datas_new/appid_datapoint_parquet1',mode='overwrite')
+    t2 = datetime.now()
+    print('time taken  = ',str(t2-t1))
+    print('real_max = ',ts[0][0])
+    
+    
+def append_to_parquet_attribute():
+
+    ## FOR APPID_ATTRIBUTE
+    print('--------------------------FOR APPID_ATTRIBUTE---------------------')
+    
+    ## finding the max time_stamp from attribute and datapoint
+    t1 = datetime.now()
+
+    ## converting the df which less than a timestamp 
+    df = attribute_df.registerTempTable('dummy')
+    ts = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+    print(ts[0][0])
+
+    if(config.test_val==1):
+        attribute_df1 = attribute_df.registerTempTable('dummy')
+        attribute_df1 = sqlContext.sql('select  *  from dummy where time_stamp<'+str(ts[0][0]))
+    else:
+        attribute_df1 = attribute_df
+
+    df_len  = attribute_df.count()
+    print('length = ',df_len)
+    
+    ## new max time_stamp
+    df = attribute_df1.registerTempTable('dummy')
+    ts_max1 = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+    
+    old_schema = attribute_df1.schema
+    print('--fetching from db--')
+
+    ## fetching the latest data from the table in db
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "select * from appid_attribute_backup10 where time_stamp>"+str(ts_max1[0][0]) 
+        cursor.execute(sql)
+        temp = (cursor.fetchall())
+        if(temp):
+            attribute_latest = pd.DataFrame(temp)
+        else:
+            attribute_latest = pd.DataFrame()
+
+    if(len(attribute_latest>0)):
+
+        attribute_latest = attribute_latest[old_schema.names]
+        attribute_latest.to_csv('temp.csv',index=False)
+    
+        #print(attribute_latest.head())
+        #datapoint_latest = sqlContext.createDataFrame(datapoint_latest1,schema=old_schema)
+
+        attribute_latest = None
+        attribute_latest = sqlContext.read.format('com.databricks.spark.csv').options(header=True, inferschema=True).load('temp.csv')
+
+
+
+        #attribute_final = attribute_df1.unionAll(attribute_latest)
+        #datapoint_final = datapoint_final.orderBy('time_stamp',ascending=False)
+
+
+        #df = attribute_final.registerTempTable('dummy')
+        #ts_max2 = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+
+        #df = attribute_final.registerTempTable('dummy')
+        #df = sqlContext.sql("select  *  from dummy where time_stamp="+str(ts[0][0])+" ")
+
+        #appending existing parquet files
+        attribute_latest.write.parquet(config.proj_path+'/datas_new/appid_attribute_parquet',
+                                        mode='append')
+    
+        print('filtered_max = ',ts_max1[0][0])
+        #print('appended final_max = ',ts_max2[0][0])
+        #df_len  = attribute_final.count()
+        #print('length = ',df_len)
+
+        #df_len  = df.count()
+        #print('length = ',df_len)
+    
+    #attribute_final.write.parquet(config.proj_path+'/datas_new/appid_attribute_parquet',mode='overwrite')
+    t2 = datetime.now()
+    print('time taken  = ',str(t2-t1))
+    print('real_max = ',ts[0][0])
+    
+    
+### functions for if parquet files not presnt
+
+def append_to_parquet_datapoint_not_present():
+    
+
+    ## FOR APPID_ATTRIBUTE
+    print('--------------------------FOR APPID_DATAPOINT-----------------------')
+
+    ## finding the max time_stamp from attribute and datapoint
+    t1 = datetime.now()
+    
+    ## new max time_stamp
+    midnight = datetime.combine(datetime.today(), time.min)
+    yesterday_midnight = midnight - timedelta(days=1)
+    ts_max1 = int(datetime.timestamp(yesterday_midnight))
+    
+    
+    #old_schema = datapoint_df1.schema
+    print('---fetching from db---')
+    ## fetching the latest data from the table in db
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "select * from appid_datapoint_backup10 where time_stamp>="+str(ts_max1) 
+        cursor.execute(sql)
+        datapoint_latest = pd.DataFrame(cursor.fetchall())
+
+    #datapoint_latest = datapoint_latest[old_schema.names]
+    datapoint_latest.to_csv('temp.csv',index=False)
+    
+    #print(datapoint_latest1.head())
+    #datapoint_latest = sqlContext.createDataFrame(datapoint_latest1,schema=old_schema)
+
+    datapoint_latest = None
+    datapoint_final = sqlContext.read.format('com.databricks.spark.csv').options(header=True, inferschema=True).load('temp.csv')
+
+
+    df = datapoint_final.registerTempTable('dummy')
+    ts_max2 = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+    
+    datapoint_final.write.parquet(config.proj_path+'/datas_new/appid_datapoint_parquet1',
+                                    mode='append')
+    t2 = datetime.now()
+    print('time taken  = ',str(t2-t1))
+    print('filtered_max = ',ts_max1)
+    print('appended final_max = ',ts_max2[0][0])
+    
+def append_to_parquet_attribute_not_present():
+
+    ## FOR APPID_ATTRIBUTE
+    print('--------------------------FOR APPID_ATTRIBUTE---------------------')
+    
+    ## finding the max time_stamp from attribute and datapoint
+    t1 = datetime.now()
+
+    ## new max time_stamp
+    midnight = datetime.combine(datetime.today(), time.min)
+    yesterday_midnight = midnight - timedelta(days=1)
+    ts_max1 = int(datetime.timestamp(yesterday_midnight))
+    
+    #old_schema = attribute_df1.schema
+    print('--fetching from db--')
+
+    ## fetching the latest data from the table in db
+    with conn.cursor() as cursor:
+        # Read a  record
+        sql = "select * from appid_attribute_backup10 where time_stamp>="+str(ts_max1) 
+        cursor.execute(sql)
+        attribute_latest = pd.DataFrame(cursor.fetchall())
+
+    #attribute_latest = attribute_latest[old_schema.names]
+    attribute_latest.to_csv('temp.csv',index=False)
+
+
+    attribute_latest = None
+    attribute_final = sqlContext.read.format('com.databricks.spark.csv').options(header=True, inferschema=True).load('temp.csv')
+
+
+    df = attribute_final.registerTempTable('dummy')
+    ts_max2 = sqlContext.sql('select  max(time_stamp) from dummy ').collect()
+
+    attribute_final.write.parquet(config.proj_path+'/datas_new/appid_attribute_parquet',
+                                    mode='append')
+    t2 = datetime.now()
+    print('time taken  = ',str(t2-t1))
+    print('filtered_max = ',ts_max1)
+    print('appended final_max = ',ts_max2[0][0])
+
+if __name__=='__main__' :
+#def main():
+
+    #upload()
+    ## test =0 for real world concept test =1 for demo (filter 1 time_stamp from actual file)
+    #test_val=1
+    global datapoint_df
+    global attribute_df
+    datapoint_flag = 1
+    attribute_flag = 1
+
+     ## Reading the df from the parquet files 
+
+    newpath = config.proj_path+'/datas_new/appid_attribute_parquet' 
+    if os.path.exists(newpath):
+        attribute_df =  sqlContext.read.parquet(config.proj_path+'/datas_new/appid_attribute_parquet')
+    else:
+        os.makedirs(newpath)
+        attribute_flag =0
+
+    newpath = config.proj_path+'/datas_new/appid_datapoint_parquet1' 
+    if os.path.exists(newpath):
+        datapoint_df = sqlContext.read.parquet(config.proj_path+'/datas_new/appid_datapoint_parquet1')
+    else:
+        os.makedirs(newpath)
+        datapoint_flag =0
+
+
+    if( datapoint_flag==1):
+        append_to_parquet_datapoint()
+    elif(datapoint_flag==0):
+        append_to_parquet_datapoint_not_present()
+
+    if( attribute_flag==1):
+        append_to_parquet_attribute()
+    elif(attribute_flag==0):
+        append_to_parquet_attribute_not_present()
+
+
+

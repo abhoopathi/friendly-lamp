@@ -144,17 +144,24 @@ def create_prophet_m(loc_name,z1,delay=24):
         
         pred_df['APE']=abs(pred_df.error_test*100/pred_df.y)
         MAPE=pred_df.APE.mean()
-        
+        min_error_rate = pred_df.quantile(0)/100
+        max_error_rate = pred_df.quantile(1)/100
+        median_error_rate = pred_df.quantile(.50) /100
         print("App name:",loc_name)
         print("MSE  :",MSE)
         print("RMSE :",RMSE)
         print("MAPE :",MAPE)
         
         mape_q98=pred_df['APE'][pred_df.APE<pred_df['APE'].quantile(0.98)].mean()
+        std_MAPE = math.sqrt(((pred_df.APE-MAPE)**2).mean())
 
-        df = pd.DataFrame({#'length':len(z1),
+        df = pd.DataFrame({'length':len(z1),
                              'test_rmse':RMSE,
                              'test_mape':MAPE,
+                             'std_mape':std_MAPE, #standerd deviation of mape
+                             'min_error_rate':min_error_rate ,
+                             'max_error_rate':max_error_rate ,
+                             'median_error_rate':median_error_rate,
                  
                  'test_mape_98':mape_q98},
                    
@@ -299,6 +306,8 @@ if __name__ == '__main__':
         prophet_analysis_df.to_sql(con=engine, name='analyse_p6', if_exists='append',index=False)
 
     print(total_time)
+    run_time_table = pd.DataFrame({'report':'p6','run_time':total_real,'run_date':datetime.now().date()},index=[6])
+    run_time_table.to_sql(con=engine, name='run_time_table', if_exists='append',index=False)
     ## Logging
     logging.info(datetime.now())
     logging.info('-I- validation of model...')

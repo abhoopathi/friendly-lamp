@@ -1,11 +1,13 @@
 # project path
-proj_path = ''
-#proj_path = '/root/ML/notebooks/exploratory_analysis/project_final'
+proj_path = './..'
+#proj_path = '.'
+#proj_path = '/root/ML/notebooks/exploratory_analysis/docker_implementation/project_final_scripts'
 
 ## mysql db details
 db_user = 'netsight'
 db_pass = 'Enterasys'
 db_name = 'netsightrpt'
+db_name2 = 'netsight'
 db_host = '10.65.47.80'
 db_port = 4589
 
@@ -17,7 +19,15 @@ sp_memory = '12gb'
 sp_cores = '16'
 
 ## the number of datapoints to be forcasted
-delay = 24
+delay = 48
+
+## sample applications using for the simple prediction 
+#apps = ['DCERPC','DNS','SSH','Salesforce']
+apps = ['DNS', 'DHCP', 'Radius', 'LDAP','Kerberos']
+
+## for evaluation of parquet file creation
+# test_val = 1 for evaluation 0 for realworld appending process
+test_val = 0
 
 ## flag to enable and disable realtime prediction and writing the results to db
 # 0-disable , 1-enable
@@ -28,5 +38,5 @@ limit = 1400
 
 ## flag to enable and disable overriding of latest result to db
 # 0 - to append the new result with existing , 1 - override the table with new result
-override_flag = 1
+override_flag = 0
 
