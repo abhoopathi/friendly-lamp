@@ -1,6 +1,6 @@
 # project path
-#proj_path = './..'
-proj_path = '.'
+proj_path = './..'
+#proj_path = '.'
 #proj_path = '/root/ML/notebooks/exploratory_analysis/docker_implementation/project_final_scripts'
 
 ## mysql db details

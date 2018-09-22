@@ -36,7 +36,7 @@ def connect_to_mysql():
                             cursorclass=pymysql.cursors.DictCursor)
     return connection
 
-conn=connect_to_mysql()
+
 
 from pyspark.context import SparkContext
 from pyspark.sql.session import SparkSession
@@ -45,19 +45,7 @@ from pyspark.sql.session import SparkSession
 from pyspark.sql import SparkSession
 
 full_t1 = datetime.now()
-# initialise sparkContext
-spark1 = SparkSession.builder \
-    .master(config.sp_master) \
-    .appName(config.sp_appname) \
-    .config('spark.executor.memory', config.sp_memory) \
-    .config("spark.cores.max", config.sp_cores) \
-    .getOrCreate()
 
-sc = spark1.sparkContext
-
-# using SQLContext to read parquet file
-
-sqlContext = SQLContext(sc)
 
 ## Logging ##
 
@@ -236,17 +224,39 @@ def comb_creation(apps):
     
     return df2
 
-if __name__ == '__main__':
-#def main():
+
+#def load_files(this_day):
+def load_files():
 
     global df
     global apps
+    global conn
+    global spark1
+    global sqlContext 
+    global sc
+    
+    conn=connect_to_mysql()
+
+
+    # initialise sparkContext
+    spark1 = SparkSession.builder \
+        .master(config.sp_master) \
+        .appName(config.sp_appname) \
+        .config('spark.executor.memory', config.sp_memory) \
+        .config("spark.cores.max", config.sp_cores) \
+        .getOrCreate()
+    
+    sc = spark1.sparkContext
+
+    # using SQLContext to read parquet file
+    from pyspark.sql import SQLContext
+    sqlContext = SQLContext(sc)
+
     # Reading data from parquet
     print('satrt quering')
 
-    pool = Parallel(n_jobs=2,verbose=5,pre_dispatch='all')
-
     df = sqlContext.read.parquet(config.proj_path+'/datas_new/appid_datapoint_parquet1')
+
 
     ### connection to partitiion table to get required apps
     #def connect_to_mysql2():
@@ -270,15 +280,34 @@ if __name__ == '__main__':
 
     #t  = list(tracked[tracked.OPTIONKEY=='AppIdSystemOptions.trackedApps'].OPTIONVALUE)
     #apps = t.split(',')
-
+ 
     apps = config.apps
     df = df[df.application.isin(apps)]
+
+    ## For validation
+    #tt = df.registerTempTable('dummy')
+    #df = sqlContext.sql('select * from dummy where time_stamp<'+str(int(datetime.timestamp(this_day))*1000))
+        
+    
+
+
+
+if __name__ == '__main__':
+#def main(day):
+
+    this_day = datetime.now().date()
+    #this_day = day.date()
+    
+    #load_files(day)
+    load_files()
 
     t1 = datetime.now()
     
     ap_list = config.apps
 
     rdf = comb_creation(apps)
+    
+    pool = Parallel(n_jobs=2,verbose=5,pre_dispatch='all')
 
 
     # Needed data extraction
@@ -386,13 +415,13 @@ if __name__ == '__main__':
         ## to create new partition the inputed table -- for forecast table
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "alter table forecast_p3_beta add partition (partition new values in ('"+str(datetime.now().date())+"'))" 
+            sql = "alter table forecast_p3_beta add partition (partition new values in ('"+str(this_day)+"'))" 
             cursor.execute(sql)
      
 
    
 
-    prophet_future_df['run_date'] = datetime.now().date()
+    prophet_future_df['run_date'] = this_day
     if((real_flag ==1) & (config.override_flag_forecast==1)):
         prophet_future_df.to_sql(con=engine, name='forecast_p3_beta', if_exists='replace', index=False )
         table_present_forecast_flag = 0
@@ -406,7 +435,7 @@ if __name__ == '__main__':
 
     #for analysis of our model in future
 
-    prophet_analysis_df['run_date'] = datetime.now().date()
+    prophet_analysis_df['run_date'] = this_day
     #prophet_analysis_df['total_run_time'] = total_real
     prophet_analysis_df.index = list(range(0,len(prophet_analysis_df)))
 
@@ -445,9 +474,9 @@ if __name__ == '__main__':
         for z in range(0,len(date_t)):
             dt = date_t[z]
             if(z!= (len(date_t)-1)):
-                dt_str = dt_str+"'"+dt+"', "
+                dt_str = dt_str+"'"+str(dt)+"', "
             else:
-                dt_str = dt_str+"'"+dt+"' "
+                dt_str = dt_str+"'"+str(dt)+"' "
     
         # adding the partition
         with conn.cursor() as cursor:
@@ -459,7 +488,7 @@ if __name__ == '__main__':
         # adding the new partition to table
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "ALTER TABLE analyse_p3_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            sql = "ALTER TABLE analyse_p3_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(this_day)+"') );" 
             cursor.execute(sql)
 
     ## if partitioned table already present or not
@@ -482,17 +511,17 @@ if __name__ == '__main__':
         ## to make new as 'latest' partition the inputed table 
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "ALTER TABLE forecast_p3_beta REORGANIZE PARTITION new INTO ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            sql = "ALTER TABLE forecast_p3_beta REORGANIZE PARTITION new INTO ( PARTITION latest VALUES IN ('"+str(this_day)+"') );" 
             cursor.execute(sql)
     else:
         # adding the partition
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "ALTER TABLE forecast_p3_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            sql = "ALTER TABLE forecast_p3_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(this_day)+"') );" 
             cursor.execute(sql)
 
     print(total_time)
-    run_time_table = pd.DataFrame({'report':'p3','run_time':total_real,'run_date':datetime.now().date()},index=[3])
+    run_time_table = pd.DataFrame({'report':'p3','run_time':total_real,'run_date':this_day},index=[3])
     run_time_table.to_sql(con=engine, name='run_time_table', if_exists='append',index=False)
     ## Logging
     logging.info(datetime.now())

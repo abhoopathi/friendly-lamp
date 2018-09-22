@@ -1,3 +1,4 @@
+
 #--------- p10 - bandwidth per source/application ---------------------------#
 
 import pandas as pd
@@ -33,6 +34,9 @@ from pyspark.sql.session import SparkSession
 
 from pyspark.sql import SparkSession
 import pymysql
+
+full_t1 = datetime.now()
+
 def connect_to_mysql():
     connection = pymysql.connect(host = config.db_host,
                             port= config.db_port,
@@ -43,22 +47,6 @@ def connect_to_mysql():
                             cursorclass=pymysql.cursors.DictCursor)
     return connection
 
-conn=connect_to_mysql()
-
-full_t1 = datetime.now()
-# initialise sparkContext
-spark1 = SparkSession.builder \
-    .master(config.sp_master) \
-    .appName(config.sp_appname) \
-    .config('spark.executor.memory', config.sp_memory) \
-    .config("spark.cores.max", config.sp_cores) \
-    .getOrCreate()
-    
-sc = spark1.sparkContext
-
-# using SQLContext to read parquet file
-from pyspark.sql import SQLContext
-sqlContext = SQLContext(sc)
 
 ## Logging ##
 
@@ -69,13 +57,7 @@ newpath = config.proj_path+'/log_for_demo/p10'
 if not os.path.exists(newpath):
     os.makedirs(newpath)
 
-#if(real_flag==1):    
-#    newpath = config.proj_path+'/p10' 
-#    if not os.path.exists(newpath):
-#        os.makedirs(newpath)
 
-#for handler in logging.root.handlers[:]:
-#    logging.root.removeHandler(handler)
     
 logging.basicConfig(filename=config.proj_path+'/log_for_demo/p10/p10.log',level=logging.DEBUG)
 
@@ -260,10 +242,32 @@ def comb_creation(apps):
     
     return df2
 
+#def load_files(this_day):
 def load_files():
 
     global df
     global apps
+    global conn
+    global spark1
+    global sqlContext 
+    global sc
+    
+    conn=connect_to_mysql()
+
+
+    # initialise sparkContext
+    spark1 = SparkSession.builder \
+        .master(config.sp_master) \
+        .appName(config.sp_appname) \
+        .config('spark.executor.memory', config.sp_memory) \
+        .config("spark.cores.max", config.sp_cores) \
+        .getOrCreate()
+    
+    sc = spark1.sparkContext
+
+    # using SQLContext to read parquet file
+    from pyspark.sql import SQLContext
+    sqlContext = SQLContext(sc)
 
     # Reading data from parquet
     print('satrt quering')
@@ -298,18 +302,30 @@ def load_files():
  
     apps = config.apps
     df = df[df.application.isin(apps)]
+    
+    ## for validation
+    #tt = df.registerTempTable('dummy')
+    #df = sqlContext.sql('select * from dummy where time_stamp<'+str(int(datetime.timestamp(this_day))*1000))
+        
+    
 
 if __name__ == '__main__':
-#def main():
+#def main(day):
 
+    this_day = datetime.now().date()
+    #this_day = day.date()
     
+    #load_files(day)
     load_files()
+    
     t1 = datetime.now()
 
     ap_list = config.apps
 
     rdf = comb_creation(apps)
 
+    
+    
     
     # Needed data extraction
 
@@ -401,7 +417,7 @@ if __name__ == '__main__':
         prophet_df.to_sql(con=engine, name='eval_p10_beta', if_exists='replace', index=False )
         bw_full_df.to_sql(con=engine, name='data_p10_beta', if_exists='replace', index=False )
     
-    prophet_future_df['run_date'] = datetime.now().date()
+    prophet_future_df['run_date'] = this_day
 
 
     ## checking whether forecast and anlyse table avilable or not
@@ -428,7 +444,7 @@ if __name__ == '__main__':
         ## to create new partition the inputed table -- for forecast table
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "alter table forecast_p10_beta add partition (partition new values in ('"+str(datetime.now().date())+"'))" 
+            sql = "alter table forecast_p10_beta add partition (partition new values in ('"+str(this_day)+"'))" 
             cursor.execute(sql)
 
 
@@ -446,7 +462,7 @@ if __name__ == '__main__':
 
     #for analysis of our model in future
 
-    prophet_analysis_df['run_date'] = datetime.now().date()
+    prophet_analysis_df['run_date'] = this_day
     #prophet_analysis_df['total_run_time'] = total_real
     prophet_analysis_df.index = list(range(0,len(prophet_analysis_df)))
 
@@ -485,9 +501,9 @@ if __name__ == '__main__':
         for z in range(0,len(date_t)):
             dt = date_t[z]
             if(z!= (len(date_t)-1)):
-                dt_str = dt_str+"'"+dt+"', "
+                dt_str = dt_str+"'"+str(dt)+"', "
             else:
-                dt_str = dt_str+"'"+dt+"' "
+                dt_str = dt_str+"'"+str(dt)+"' "
     
         # adding the partition
         with conn.cursor() as cursor:
@@ -498,7 +514,7 @@ if __name__ == '__main__':
         # adding the partition
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "ALTER TABLE analyse_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            sql = "ALTER TABLE analyse_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(this_day)+"') );" 
             cursor.execute(sql)
 
 
@@ -522,17 +538,17 @@ if __name__ == '__main__':
         ## to make new as 'latest' partition the inputed table 
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "ALTER TABLE forecast_p10_beta REORGANIZE PARTITION new INTO ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            sql = "ALTER TABLE forecast_p10_beta REORGANIZE PARTITION new INTO ( PARTITION latest VALUES IN ('"+str(this_day)+"') );" 
             cursor.execute(sql)
 
     else:
         ## to make new as 'latest' partition the inputed table 
         with conn.cursor() as cursor:
             # Read a  record
-            sql = "ALTER TABLE forecast_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            sql = "ALTER TABLE forecast_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(this_day)+"') );" 
             cursor.execute(sql)
     
-    run_time_table = pd.DataFrame({'report':'p10','run_time':total_real,'run_date':datetime.now().date()},index=[4])
+    run_time_table = pd.DataFrame({'report':'p10','run_time':total_real,'run_date':this_day},index=[4])
     run_time_table.to_sql(con=engine, name='run_time_table', if_exists='append',index=False)
     ## Logging
     logging.info(datetime.now())
@@ -549,5 +565,5 @@ if __name__ == '__main__':
     print ('Total nof combinations = ', len(rdf))
     print ('Total nof combinations for ',a,' = ', len(rdf[rdf.application==a]))
     conn.close()
-    #spark1.close()
+    spark1.stop()
     #conn2.close()
