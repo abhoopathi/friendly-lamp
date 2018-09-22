@@ -260,8 +260,7 @@ def comb_creation(apps):
     
     return df2
 
-#if __name__ == '__main__':
-def main():
+def load_files():
 
     global df
     global apps
@@ -300,6 +299,11 @@ def main():
     apps = config.apps
     df = df[df.application.isin(apps)]
 
+if __name__ == '__main__':
+#def main():
+
+    
+    load_files()
     t1 = datetime.now()
 
     ap_list = config.apps
@@ -322,6 +326,8 @@ def main():
 
     t2 = datetime.now()
     time_to_fetch = str(t2-t1)
+
+    pool = Parallel(n_jobs=2,verbose=5,pre_dispatch='all')
 
     for a in tqdm(ap_list):
     #for k in tqdm(range(1,2)):
@@ -363,7 +369,7 @@ def main():
 
         qt3 = datetime.now()
 
-        pool = Parallel(n_jobs=-1,verbose=5,pre_dispatch='all')
+        
         r0  = pool(delayed(forcomb)(a,s,bw_df,qt1) for s in so_array) 
 
         qt5 = datetime.now()
@@ -397,9 +403,39 @@ def main():
     
     prophet_future_df['run_date'] = datetime.now().date()
 
-    if((real_flag ==1) & (config.override_flag==1)):
+
+    ## checking whether forecast and anlyse table avilable or not
+    with conn.cursor() as cursor:
+        stmt = "SHOW TABLES LIKE 'forecast_p10_beta'"
+        cursor.execute(stmt)
+        result = cursor.fetchone()
+    if result:
+        table_present_forecast_flag =1
+    else:
+        table_present_forecast_flag =0
+
+    with conn.cursor() as cursor:
+        stmt = "SHOW TABLES LIKE 'analyse_p10_beta'"
+        cursor.execute(stmt)
+        result = cursor.fetchone()
+    if result:
+        table_present_analyse_flag =1
+    else:
+        table_present_analyse_flag =0
+
+
+    if(table_present_forecast_flag ==1):
+        ## to create new partition the inputed table -- for forecast table
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "alter table forecast_p10_beta add partition (partition new values in ('"+str(datetime.now().date())+"'))" 
+            cursor.execute(sql)
+
+
+    if((real_flag ==1) & (config.override_flag_forecast==1)):
         prophet_future_df.to_sql(con=engine, name='forecast_p10_beta', if_exists='replace', index=False )
-    elif((real_flag ==1) & (config.override_flag==0)):
+        table_present_forecast_flag = 0
+    elif((real_flag ==1) & (config.override_flag_forecast==0)):
         prophet_future_df.to_sql(con=engine, name='forecast_p10_beta', if_exists='append', index=False )
 
 
@@ -414,35 +450,87 @@ def main():
     #prophet_analysis_df['total_run_time'] = total_real
     prophet_analysis_df.index = list(range(0,len(prophet_analysis_df)))
 
-    if(config.override_flag == 1):
+
+    if(table_present_analyse_flag == 1):
+        ## to create new partition the inputed table -- for analysis table
+        # renaming latest to old
+        ## to make new as 'latest' partition the inputed table 
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = " alter table analyse_p10_beta remove partitioning" 
+ 
+            cursor.execute(sql)
+
+    if(config.override_flag_analysis == 1):
         prophet_analysis_df.to_sql(con=engine, name='analyse_p10_beta', if_exists='replace',index=False)
+        table_present_analyse_flag =0
     else:
         prophet_analysis_df.to_sql(con=engine, name='analyse_p10_beta', if_exists='append',index=False)
 
 
-    ## to create new partition the inputed table 
-    with conn.cursor() as cursor:
-        # Read a  record
-        sql = "alter table analyse_p3_beta add partition (partition new values in ('"+datetime.now().date()+"'))" 
-        cursor.execute(sql)
 
-    ## to drop 'latest' partition  
-    with conn.cursor() as cursor:
-        # Read a  record
-        sql = "alter table analyse_p3_beta drop partition latest" 
-        cursor.execute(sql)
+    ## if partitioned table already present or not
+    if(table_present_analyse_flag ==1):
+        
+    
+        # selecting unique run_dates from analysis table
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "select distinct run_date as run_date from analyse_p10_beta " 
+            cursor.execute(sql)
+            d_dates = pd.DataFrame(cursor.fetchall())
 
-    ## to make new as 'latest' partition the inputed table 
-    with conn.cursor() as cursor:
-        # Read a  record
-        sql = "ALTER TABLE analyse_p3_beta RENAME PARTITION new INTO latest" 
-        cursor.execute(sql)
+        date_t = list(d_dates['run_date'])
+        dt_str = " "
+        for z in range(0,len(date_t)):
+            dt = date_t[z]
+            if(z!= (len(date_t)-1)):
+                dt_str = dt_str+"'"+dt+"', "
+            else:
+                dt_str = dt_str+"'"+dt+"' "
+    
+        # adding the partition
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "ALTER TABLE analyse_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ("+dt_str+") );" 
+            cursor.execute(sql)
+    else:
+        # adding the partition
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "ALTER TABLE analyse_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            cursor.execute(sql)
 
-    ## to partition the inputed table 
-    with conn.cursor() as cursor:
-        # Read a  record
-        sql = "alter table forecast_p10_beta partition by key(ds) partitions 6 " 
-        cursor.execute(sql)
+
+    ## if partitioned table already present or not
+    if(table_present_forecast_flag ==1):
+        
+
+        ## to delete 'latest' data  
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "alter table forecast_p10_beta truncate partition latest" 
+            cursor.execute(sql)
+    
+
+        ## to drop 'latest' partition  
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "alter table forecast_p10_beta drop partition latest" 
+            cursor.execute(sql)
+
+        ## to make new as 'latest' partition the inputed table 
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "ALTER TABLE forecast_p10_beta REORGANIZE PARTITION new INTO ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            cursor.execute(sql)
+
+    else:
+        ## to make new as 'latest' partition the inputed table 
+        with conn.cursor() as cursor:
+            # Read a  record
+            sql = "ALTER TABLE forecast_p10_beta PARTITION BY LIST COLUMNS (run_date) ( PARTITION latest VALUES IN ('"+str(datetime.now().date())+"') );" 
+            cursor.execute(sql)
     
     run_time_table = pd.DataFrame({'report':'p10','run_time':total_real,'run_date':datetime.now().date()},index=[4])
     run_time_table.to_sql(con=engine, name='run_time_table', if_exists='append',index=False)
@@ -460,3 +548,6 @@ def main():
     print ('Total run time  is ', total_time)
     print ('Total nof combinations = ', len(rdf))
     print ('Total nof combinations for ',a,' = ', len(rdf[rdf.application==a]))
+    conn.close()
+    #spark1.close()
+    #conn2.close()
