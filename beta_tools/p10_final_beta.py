@@ -58,10 +58,6 @@ if not os.path.exists(newpath):
     os.makedirs(newpath)
 
 
-    
-logging.basicConfig(filename=config.proj_path+'/log_for_demo/p10/p10.log',level=logging.DEBUG)
-
-
 
 from fbprophet import Prophet
 from sklearn.metrics import mean_squared_error as mse
@@ -181,9 +177,7 @@ def forcomb(a,s,df,ftime1):
     prophet_analysis_df = pd.DataFrame()
     prophet_future_df = pd.DataFrame()
    
-    
-    
-    
+   
 
     if(len(df2)>config.limit):
        
@@ -204,6 +198,7 @@ def forcomb(a,s,df,ftime1):
     
     return prophet_df, prophet_analysis_df, prophet_future_df ,df2
 
+## To find the combinations of report
 def comb_creation(apps):
     from pyspark.sql.functions import when
 
@@ -311,6 +306,8 @@ def load_files():
 
 if __name__ == '__main__':
 #def main(day):
+
+    logging.basicConfig(filename=config.proj_path+'/log_for_demo/p10/p10.log',level=logging.DEBUG)
 
     this_day = datetime.now().date()
     #this_day = day.date()

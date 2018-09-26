@@ -56,19 +56,7 @@ newpath = config.proj_path+'/log_for_demo/p3'
 if not os.path.exists(newpath):
     os.makedirs(newpath)
 
-#if(real_flag==1):    
-#    newpath = config.proj_path+'/p3' 
-#    if not os.path.exists(newpath):
-#        os.makedirs(newpath)
 
-#for handler in logging.root.handlers[:]:
-#    logging.root.removeHandler(handler)
-    
-logging.basicConfig(filename=config.proj_path+'/log_for_demo/p3/p3.log',level=logging.DEBUG)
-
-
-#df_len = df_full.count()
-#df_offset_len = df_len/4
 
 def create_prophet_m(app_name,z1,delay=24):
     
@@ -187,6 +175,7 @@ def forcomb(s,a,df,ftime1):
     
     return prophet_df, prophet_analysis_df, prophet_future_df , df2
 
+## to create required combinations as per the report
 def comb_creation(apps):
     from pyspark.sql.functions import when
 
@@ -295,6 +284,8 @@ def load_files():
 if __name__ == '__main__':
 #def main(day):
 
+    logging.basicConfig(filename=config.proj_path+'/log_for_demo/p3/p3.log',level=logging.DEBUG)
+
     this_day = datetime.now().date()
     #this_day = day.date()
     
@@ -337,8 +328,8 @@ if __name__ == '__main__':
         user_count_df=df_t.toPandas()
     
 
-        #s_array = user_count_df.source.unique()
-        s_array = rdf.source.unique()
+        s_array = user_count_df.source.unique()
+        #s_array = rdf.source.unique()
 
         user_count_df = user_count_df.sort_values(by='user_count',ascending=True)       
         dates_outlook = pd.to_datetime(pd.Series(user_count_df.time_stamp),unit='ms')
