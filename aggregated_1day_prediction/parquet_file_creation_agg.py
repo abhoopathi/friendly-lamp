@@ -91,7 +91,7 @@ def append_to_parquet_datapoint():
     print('nof data points available =',counts['count'])
     #for j in range(0,24):
     for j in range(0,counts['count'][0]):
-        print(j)
+        #print(j)
         try:    
             temp1 = ts_max_date[0] + timedelta(hours=j)
             ts_max1=(int(datetime.timestamp(temp1))*1000)
@@ -446,7 +446,7 @@ if __name__=='__main__' :
 
 
     if( datapoint_flag==1):
-        #append_to_parquet_datapoint()
+        append_to_parquet_datapoint()
         make_90day()
     elif(datapoint_flag==0):
         append_to_parquet_datapoint_not_present_90()
