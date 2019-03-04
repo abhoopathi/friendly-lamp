@@ -18,6 +18,7 @@ sp_cores = '16'
 
 ## the number of datapoints to be forcasted
 delay = 24
+# delay = 48
 
 ## flag to enable and disable realtime prediction and writing the results to db
 # 0-disable , 1-enable
