@@ -20,6 +20,7 @@ sp_cores = '2'
 
 ## the number of datapoints to be forcasted
 delay = 30
+## delay = 10
 
 ## sample applications using for the simple prediction 
 #apps = ['DCERPC','DNS','SSH','Salesforce']
