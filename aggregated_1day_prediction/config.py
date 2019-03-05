@@ -1,7 +1,7 @@
 # project path
 #proj_path = './..'
-#proj_path = '.'
-proj_path = '/root/ML/notebooks/exploratory_analysis/docker_implementation/aggregated_1day_prediction'
+proj_path = '.'
+#proj_path = '/root/ML/notebooks/notebooks/exploratory_analysis/docker_implementation/aggregated_1day_prediction'
 
 ## mysql db details
 db_user = 'netsight'
@@ -20,6 +20,7 @@ sp_cores = '2'
 
 ## the number of datapoints to be forcasted
 delay = 30
+delay_48 = 48
 
 ## sample applications using for the simple prediction 
 #apps = ['DCERPC','DNS','SSH','Salesforce']

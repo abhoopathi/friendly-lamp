@@ -50,6 +50,16 @@ def job():
             os.system("python "+config.proj_path+"/p8_final_agg.py")
             os.system("python "+config.proj_path+"/p9_final_agg.py")
             os.system("python "+config.proj_path+"/p10_final_agg.py")
+            
+            ## For 48 hrs prediction
+            os.system("python "+config.proj_path+"/p1_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p2_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p3_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p6_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p7_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p8_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p9_agg_48hrs.py")
+            os.system("python "+config.proj_path+"/p10_agg_48hrs.py")
         
 
 
