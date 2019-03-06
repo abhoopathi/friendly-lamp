@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Oct 30 15:25:03 2018
 
-@author: roopeshp
-"""
 
 #--------- p6 - Number of targets(users) per location ---------------------------#
 
@@ -204,6 +198,9 @@ def forcomb(s,df,ftime1,cpu_perc_list):
     
     df2 = df2.reset_index()
     df2 = df2.sort_values(by='date',ascending=True)
+
+    df2 = df2.iloc[len(df2)-90:len(df2),]
+
     df2.index = df2['date']
     del df2['date']
     

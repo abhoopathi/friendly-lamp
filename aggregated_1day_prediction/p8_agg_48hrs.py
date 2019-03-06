@@ -179,6 +179,9 @@ def forcomb(s,df,ftime1,cpu_perc_list):
     
     df2 = df2.reset_index()
     df2 = df2.sort_values(by='date',ascending=True)
+
+    df2 = df2.iloc[len(df2)-90:len(df2),]
+
     df2.index = df2['date']
     del df2['date']
     
