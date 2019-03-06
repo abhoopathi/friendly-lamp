@@ -20,7 +20,11 @@ sp_cores = '2'
 
 ## the number of datapoints to be forcasted
 delay = 30
+<<<<<<< HEAD
 delay_48 = 48
+=======
+## delay = 10
+>>>>>>> 385270cba608fa3910702e7f138fa995e6ef17b4
 
 ## sample applications using for the simple prediction 
 #apps = ['DCERPC','DNS','SSH','Salesforce']

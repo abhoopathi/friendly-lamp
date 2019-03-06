@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 FROM continuumio/anaconda3:5.2.0 
 MAINTAINER "Predmac Technologies"
+=======
+FROM continuumio/anaconda3
+MAINTAINER "Extreme Networks"
+>>>>>>> 385270cba608fa3910702e7f138fa995e6ef17b4
 
 RUN apt-get update && apt-get install -y software-properties-common
 

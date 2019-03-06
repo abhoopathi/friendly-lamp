@@ -1,5 +1,5 @@
 FROM continuumio/anaconda3
-MAINTAINER "Predmac Technologies"
+MAINTAINER "Extreme Networks"
 
 RUN apt-get update && apt-get install -y software-properties-common
 RUN add-apt-repository ppa:webupd8team/java 
